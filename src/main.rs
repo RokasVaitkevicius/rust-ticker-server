@@ -4,13 +4,17 @@ use axum::{routing::get, Router, Server, Extension};
 use routes::{graphql_playground, graphql_handler};
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use std::net::SocketAddr;
+use dotenv::dotenv;
+use std::env;
 
 mod routes;
 mod model;
 
 #[tokio::main]
 async fn main() {
-    let port = "8080";
+     dotenv().ok();
+
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
         .parse()
         .expect("Invalid address format");
