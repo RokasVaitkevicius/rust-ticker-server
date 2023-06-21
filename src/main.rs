@@ -9,6 +9,7 @@ use std::env;
 
 mod routes;
 mod model;
+mod coinbase;
 
 #[tokio::main]
 async fn main() {
