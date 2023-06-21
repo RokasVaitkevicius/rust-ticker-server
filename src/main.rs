@@ -3,13 +3,18 @@ use crate::model::QueryRoot;
 use axum::{routing::get, Router, Server, Extension};
 use routes::{graphql_playground, graphql_handler};
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+use std::net::SocketAddr;
 
 mod routes;
 mod model;
 
 #[tokio::main]
 async fn main() {
-    let port = "0.0.0.0:8080";
+    let port = "8080";
+    let addr: SocketAddr = format!("0.0.0.0:{}", port)
+        .parse()
+        .expect("Invalid address format");
+
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
     let app = Router::new()
         .route("/", get(root))
@@ -17,10 +22,13 @@ async fn main() {
         .route("/graphql", get(graphql_playground).post(graphql_handler))
         .layer(Extension(schema));
 
-    println!("Server is running on port {}", port);
+    println!("Server is running on {}", addr);
 
-    Server::bind(&port.parse().unwrap())
+    if let Err(e) = Server::bind(&addr)
         .serve(app.into_make_service())
         .await
-        .unwrap();
+    {
+        eprintln!("Server error: {}", e);
+        std::process::exit(1);
+    }
 }
