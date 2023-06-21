@@ -1,8 +1,9 @@
 use axum::{http::StatusCode, response::{IntoResponse, Html}, Json, extract::Extension,};
 use serde::{Serialize};
-use crate::model::ServiceSchema;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
+
+use crate::model::ServiceSchema;
 
 #[derive(Serialize)]
 struct Health {

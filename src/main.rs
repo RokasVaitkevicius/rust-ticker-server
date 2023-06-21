@@ -1,11 +1,12 @@
-use crate::routes::{health, root};
-use crate::model::QueryRoot;
 use axum::{routing::get, Router, Server, Extension};
 use routes::{graphql_playground, graphql_handler};
-use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+use async_graphql::{EmptySubscription, Schema};
 use std::net::SocketAddr;
 use dotenv::dotenv;
 use std::env;
+
+use crate::routes::{health, root};
+use crate::model::{QueryRoot, MutationRoot};
 
 mod routes;
 mod model;
@@ -20,7 +21,7 @@ async fn main() {
         .parse()
         .expect("Invalid address format");
 
-    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
+    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish();
     let app = Router::new()
         .route("/", get(root))
         .route("/health", get(health))

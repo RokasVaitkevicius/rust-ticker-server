@@ -1,22 +1,24 @@
-use async_graphql::{Context, Object, Schema};
-use async_graphql::{EmptyMutation, EmptySubscription};
+use async_graphql::{Context, Object, Schema, EmptySubscription};
 
 use crate::coinbase::fetch_coinbase_price;
 
-pub type ServiceSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 pub struct QueryRoot;
+pub struct MutationRoot;
 
 #[Object]
 impl QueryRoot {
     async fn hello(&self, _ctx: &Context<'_>) -> &'static str {
         "Hello world"
     }
+}
 
-    async fn ticker_price(&self, _ctx: &Context<'_>) -> String {
-        match fetch_coinbase_price().await {
-            Ok(tickerData) => {
-                println!("Coinbase amount: {:#?}", tickerData);
-                tickerData.amount
+#[Object]
+impl MutationRoot {
+    async fn ticker_price(&self, base: String, quote: String) -> String {
+        match fetch_coinbase_price(base.as_str(), quote.as_str()).await {
+            Ok(ticker_data) => {
+                ticker_data.amount
             }
             Err(err) => {
                 eprintln!("Error retrieving Coinbase amount: {}", err);
