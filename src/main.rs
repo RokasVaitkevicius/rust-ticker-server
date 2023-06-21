@@ -1,20 +1,20 @@
-use axum::{routing::get, Router, Server, Extension};
-use routes::{graphql_playground, graphql_handler};
 use async_graphql::{EmptySubscription, Schema};
-use std::net::SocketAddr;
+use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
+use routes::{graphql_handler, graphql_playground};
 use std::env;
+use std::net::SocketAddr;
 
+use crate::model::{MutationRoot, QueryRoot};
 use crate::routes::{health, root};
-use crate::model::{QueryRoot, MutationRoot};
 
-mod routes;
-mod model;
 mod coinbase;
+mod model;
+mod routes;
 
 #[tokio::main]
 async fn main() {
-     dotenv().ok();
+    dotenv().ok();
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
@@ -30,10 +30,7 @@ async fn main() {
 
     println!("Server is running on {}", addr);
 
-    if let Err(e) = Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-    {
+    if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
         eprintln!("Server error: {}", e);
         std::process::exit(1);
     }

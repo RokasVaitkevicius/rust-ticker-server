@@ -1,4 +1,4 @@
-use async_graphql::{Context, Object, Schema, EmptySubscription};
+use async_graphql::{Context, EmptySubscription, Object, Schema};
 
 use crate::coinbase::fetch_coinbase_price;
 
@@ -17,9 +17,7 @@ impl QueryRoot {
 impl MutationRoot {
     async fn ticker_price(&self, base: String, quote: String) -> String {
         match fetch_coinbase_price(base.as_str(), quote.as_str()).await {
-            Ok(ticker_data) => {
-                ticker_data.amount
-            }
+            Ok(ticker_data) => ticker_data.amount,
             Err(err) => {
                 eprintln!("Error retrieving Coinbase amount: {}", err);
                 String::from("Failed to fetch ticker price")

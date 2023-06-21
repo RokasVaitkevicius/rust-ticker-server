@@ -1,7 +1,12 @@
-use axum::{http::StatusCode, response::{IntoResponse, Html}, Json, extract::Extension,};
-use serde::{Serialize};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::{
+    extract::Extension,
+    http::StatusCode,
+    response::{Html, IntoResponse},
+    Json,
+};
+use serde::Serialize;
 
 use crate::model::ServiceSchema;
 
