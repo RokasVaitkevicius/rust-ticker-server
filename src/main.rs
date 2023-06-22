@@ -5,6 +5,7 @@ use routes::{graphql_handler, graphql_playground};
 use std::env;
 use std::net::SocketAddr;
 
+use crate::coinbase::subscribe_coinbase_ticker;
 use crate::model::{MutationRoot, QueryRoot};
 use crate::routes::{health, root};
 
@@ -29,6 +30,10 @@ async fn main() {
         .layer(Extension(schema));
 
     println!("Server is running on {}", addr);
+
+    if let Err(e) = subscribe_coinbase_ticker().await {
+        eprintln!("Coinbase websocket connection error: {}", e);
+    };
 
     if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
         eprintln!("Server error: {}", e);

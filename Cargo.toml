@@ -12,6 +12,9 @@ async-graphql-axum = "5.0.10"
 dotenv = "0.15.0"
 reqwest = "0.11.18"
 serde_json = "1.0.97"
+tungstenite = "0.19.0"
+tokio-tungstenite = { version = "0.19.0", features = ["native-tls"] }
+futures-util = "0.3.28"
 
 [dev-dependencies]
 cargo-watch = "8.4.0"

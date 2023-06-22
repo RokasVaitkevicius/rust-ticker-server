@@ -1,5 +1,7 @@
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::error::Error;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 #[derive(Deserialize)]
 struct CoinbaseResponse {
@@ -29,4 +31,42 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData,
     } else {
         Err("Unknown error".into())
     }
+}
+
+pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error>> {
+    let url = "wss://ws-feed.exchange.coinbase.com";
+    let (mut ws_stream, _) = connect_async(url).await?;
+
+    println!("Connected to WebSocket");
+
+    let subscribe_msg = r#"{
+        "type": "subscribe",
+        "channels": [{ "name": "ticker", "product_ids": ["BTC-USD"] }]
+    }"#;
+
+    ws_stream.send(Message::Text(subscribe_msg.into())).await?;
+    println!("Subscribed to ticker channel");
+
+    while let Some(Ok(message)) = ws_stream.next().await {
+        match message {
+            Message::Text(data) => {
+                println!("Received message: {}", data);
+
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
+                    if let Some(price) = json.get("price") {
+                        if let Some(ticker_price) = price.as_str() {
+                            println!("Ticker price: {}", ticker_price);
+                        }
+                    }
+                }
+            }
+            Message::Close(_) => {
+                println!("WebSocket connection closed");
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
 }
