@@ -4,7 +4,7 @@ use dotenv::dotenv;
 use routes::{graphql_handler, graphql_playground};
 use std::env;
 use std::net::SocketAddr;
-use redis::{Commands};
+use redis::Commands;
 
 use crate::coinbase::subscribe_coinbase_ticker;
 use crate::model::{MutationRoot, QueryRoot};
@@ -13,6 +13,7 @@ use crate::routes::{health, root};
 mod coinbase;
 mod model;
 mod routes;
+mod redis_connection;
 
 #[tokio::main]
 async fn main() {
@@ -37,8 +38,9 @@ async fn main() {
     // };
 
     // connect to redis
-    let client = redis::Client::open("redis://127.0.0.1:6379/").unwrap();
-    let mut con = client.get_connection().unwrap();
+    // let mut con = Client::open("redis://127.0.0.1:6379/").unwrap().get_connection().unwrap();
+    let mut con = redis_connection::get_redis_connection();
+    // let mut con = client.get_connection().unwrap();
     let _ : () = con.set("my_key", 42).unwrap();
     let a: String = con.get("my_key").unwrap();
     println!("Result: {}", a);
