@@ -4,6 +4,7 @@ use dotenv::dotenv;
 use routes::{graphql_handler, graphql_playground};
 use std::env;
 use std::net::SocketAddr;
+use redis::{Commands};
 
 use crate::coinbase::subscribe_coinbase_ticker;
 use crate::model::{MutationRoot, QueryRoot};
@@ -31,9 +32,17 @@ async fn main() {
 
     println!("Server is running on {}", addr);
 
-    if let Err(e) = subscribe_coinbase_ticker().await {
-        eprintln!("Coinbase websocket connection error: {}", e);
-    };
+    // if let Err(e) = subscribe_coinbase_ticker().await {
+    //     eprintln!("Coinbase websocket connection error: {}", e);
+    // };
+
+    // connect to redis
+    let client = redis::Client::open("redis://127.0.0.1:6379/").unwrap();
+    let mut con = client.get_connection().unwrap();
+    let _ : () = con.set("my_key", 42).unwrap();
+    let a: String = con.get("my_key").unwrap();
+    println!("Result: {}", a);
+    //----
 
     if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
         eprintln!("Server error: {}", e);
