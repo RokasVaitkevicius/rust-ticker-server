@@ -1,4 +1,5 @@
 use futures_util::{SinkExt, StreamExt};
+use redis::Client;
 use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
@@ -78,7 +79,10 @@ pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error
     ws_stream.send(Message::Text(subscribe_msg.into())).await?;
     println!("Subscribed to ticker channel");
 
-    let mut con = redis_connection::get_redis_connection();
+    // let mut con = redis_connection::get_redis_connection();
+    // TODO: figure out a way how to reuse connection
+    let client = Client::open("redis://127.0.0.1:6379/").unwrap();
+    let mut connection = client.get_connection().unwrap();
 
     while let Some(Ok(message)) = ws_stream.next().await {
         match message {
@@ -93,14 +97,13 @@ pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error
 
                     println!("{}", coinbase_message);
 
-                    let key = coinbase_message.product_id.to_string();
                     let _: () = redis::cmd("SET")
-                        .arg(key)
+                        .arg(coinbase_message.product_id)
                         .arg(coinbase_message.price)
                         .arg("NX")
                         .arg("EX")
                         .arg(20)
-                        .query(&mut con)
+                        .query(&mut connection)
                         .unwrap();
                 }
             }

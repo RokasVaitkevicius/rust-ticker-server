@@ -1,6 +1,7 @@
 use async_graphql::{EmptySubscription, Schema};
 use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
+use futures_util::TryFutureExt;
 use routes::{graphql_handler, graphql_playground};
 use std::env;
 use std::net::SocketAddr;
@@ -32,9 +33,12 @@ async fn main() {
 
     println!("Server is running on {}", addr);
 
-    if let Err(e) = subscribe_coinbase_ticker().await {
-        eprintln!("Coinbase websocket connection error: {}", e);
-    };
+    tokio::task::spawn(async move {
+        subscribe_coinbase_ticker()
+            .unwrap_or_else(|(err)| println!("Connecting to socket failed: {}", err))
+            .await
+        }
+    );
 
     if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
         eprintln!("Server error: {}", e);
