@@ -5,8 +5,6 @@ use std::error::Error;
 use std::fmt;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use crate::redis_connection;
-
 #[derive(Deserialize)]
 struct CoinbaseResponse {
     data: TickerData,
@@ -21,23 +19,8 @@ pub struct TickerData {
 
 #[derive(Deserialize, Debug)]
 pub struct CoinbaseMessage {
-    // type: String,
-    sequence: u64,
     product_id: String,
     price: String,
-    open_24h: String,
-    volume_24h: String,
-    low_24h: String,
-    high_24h: String,
-    volume_30d: String,
-    best_bid: String,
-    best_bid_size: String,
-    best_ask: String,
-    best_ask_size: String,
-    side: String,
-    time: String,
-    trade_id: u64,
-    last_size: String,
 }
 
 impl fmt::Display for CoinbaseMessage {
@@ -95,7 +78,7 @@ pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error
                 if v["type"] == "ticker" {
                     let coinbase_message: CoinbaseMessage = serde_json::from_str(&data)?;
 
-                    println!("{}", coinbase_message);
+                    // println!("{}", coinbase_message);
 
                     let _: () = redis::cmd("SET")
                         .arg(coinbase_message.product_id)

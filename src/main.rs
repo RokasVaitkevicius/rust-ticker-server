@@ -35,10 +35,9 @@ async fn main() {
 
     tokio::task::spawn(async move {
         subscribe_coinbase_ticker()
-            .unwrap_or_else(|(err)| println!("Connecting to socket failed: {}", err))
+            .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
             .await
-        }
-    );
+    });
 
     if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
         eprintln!("Server error: {}", e);

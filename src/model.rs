@@ -1,5 +1,4 @@
 use async_graphql::{Context, EmptySubscription, Object, Schema};
-use redis::Client;
 
 use crate::coinbase::fetch_coinbase_price;
 use crate::redis_connection;
@@ -18,20 +17,29 @@ impl QueryRoot {
 #[Object]
 impl MutationRoot {
     async fn ticker_price(&self, base: String, quote: String) -> String {
-        let redis_key = format!("{}-{}", base, quote);
+        // TODO: check how to use directives to uppercase base and quote
+        let redis_key = format!("{}-{}", base.to_uppercase(), quote.to_uppercase());
 
-        let redis_value: String = redis::cmd("GET")
-            .arg(redis_key)
-            .query(&mut *redis_connection::get_redis_connection())
-            .unwrap_or_else(|_| String::from("Failed to fetch ticker price"));
+        let redis_value = redis::cmd("GET")
+            .arg(&redis_key)
+            .query(&mut *redis_connection::get_redis_connection());
 
-        println!("Redis value: {}", redis_value);
-
-        match fetch_coinbase_price(base.as_str(), quote.as_str()).await {
-            Ok(ticker_data) => ticker_data.amount,
+        match redis_value {
+            Ok(value) => {
+                println!("Cache hit: {}", value);
+                return value;
+            }
             Err(err) => {
-                eprintln!("Error retrieving Coinbase amount: {}", err);
-                String::from("Failed to fetch ticker price")
+                eprintln!("Cache hit missed key: {}", redis_key);
+                eprintln!("Error: {}", err);
+                match fetch_coinbase_price(base.as_str(), quote.as_str()).await {
+                    Ok(ticker_data) => ticker_data.amount,
+                    Err(err) => {
+                        eprintln!("Error retrieving Coinbase amount: {}", err);
+                        // TODO: should return a GraphQL error
+                        String::from("Failed to fetch ticker price")
+                    }
+                }
             }
         }
     }
