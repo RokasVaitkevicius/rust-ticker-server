@@ -3,17 +3,18 @@ use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
 use routes::{graphql_handler, graphql_playground};
-use std::env;
-use std::net::SocketAddr;
+use std::{env, net::SocketAddr};
 
 use crate::coinbase::subscribe_coinbase_ticker;
 use crate::model::{MutationRoot, QueryRoot};
 use crate::routes::{health, root};
+use crate::websocket::websocket_handler;
 
 mod coinbase;
 mod model;
 mod redis_connection;
 mod routes;
+mod websocket;
 
 #[tokio::main]
 async fn main() {
@@ -24,15 +25,16 @@ async fn main() {
         .parse()
         .expect("Invalid address format");
 
-    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish();
+    let gql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish();
+
     let app = Router::new()
         .route("/", get(root))
+        .route("/ws", get(websocket_handler))
         .route("/health", get(health))
         .route("/graphql", get(graphql_playground).post(graphql_handler))
-        .layer(Extension(schema));
+        .layer(Extension(gql_schema));
 
-    println!("Server is running on {}", addr);
-
+    // Spinning up a separate task to subscribe to Coinbase ticker
     tokio::task::spawn(async move {
         subscribe_coinbase_ticker()
             .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))

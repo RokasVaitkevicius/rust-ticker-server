@@ -1,5 +1,6 @@
 use futures_util::{SinkExt, StreamExt};
-use redis::Client;
+use redis::Client as RedisClient;
+use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
@@ -33,7 +34,7 @@ impl fmt::Display for CoinbaseMessage {
 pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData, Box<dyn Error>> {
     let url = format!("https://api.coinbase.com/v2/prices/{}-{}/buy", base, quote);
 
-    let client = reqwest::Client::new();
+    let client = ReqwestClient::new();
     let response = client.get(&url).send().await?;
 
     if response.status().is_success() {
@@ -52,11 +53,11 @@ pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error
     let url = "wss://ws-feed.exchange.coinbase.com";
     let (mut ws_stream, _) = connect_async(url).await?;
 
-    println!("Connected to WebSocket");
+    println!("Connected to Coinbase WebSocket");
 
     let subscribe_msg = r#"{
         "type": "subscribe",
-        "channels": [{ "name": "ticker", "product_ids": ["BTC-USD"] }]
+        "channels": [{ "name": "ticker", "product_ids": ["BTC-USD"] }, { "name": "ticker", "product_ids": ["ETH-USD"] }]
     }"#;
 
     ws_stream.send(Message::Text(subscribe_msg.into())).await?;
@@ -64,7 +65,7 @@ pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error
 
     // let mut con = redis_connection::get_redis_connection();
     // TODO: figure out a way how to reuse connection
-    let client = Client::open("redis://127.0.0.1:6379/").unwrap();
+    let client = RedisClient::open("redis://127.0.0.1:6379/").unwrap();
     let mut connection = client.get_connection().unwrap();
 
     while let Some(Ok(message)) = ws_stream.next().await {
