@@ -1,9 +1,9 @@
 use futures_util::{SinkExt, StreamExt};
-use redis::Client as RedisClient;
+use redis::{Client as RedisClient, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
-use std::error::Error;
-use std::fmt;
+use tokio::sync::mpsc::UnboundedSender;
+use std::{fmt, error::Error, sync::Arc};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 #[derive(Deserialize)]
@@ -49,7 +49,7 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData,
     }
 }
 
-pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn subscribe_coinbase_ticker(ws_tx: &Arc<tokio::sync::Mutex<UnboundedSender<tungstenite::Message>>>) -> Result<(), Box<dyn std::error::Error>> {
     let url = "wss://ws-feed.exchange.coinbase.com";
     let (mut ws_stream, _) = connect_async(url).await?;
 
@@ -81,15 +81,32 @@ pub async fn subscribe_coinbase_ticker() -> Result<(), Box<dyn std::error::Error
 
                     // println!("{}", coinbase_message);
 
-                    let _: () = redis::cmd("SET")
-                        .arg(coinbase_message.product_id)
-                        .arg(coinbase_message.price)
+                    let redis_result: Result<Value, redis::RedisError> = redis::cmd("SET")
+                        .arg(&coinbase_message.product_id)
+                        .arg(&coinbase_message.price)
                         .arg("NX")
+                        .arg("GET")
                         .arg("EX")
                         .arg(20)
-                        .query(&mut connection)
-                        .unwrap();
+                        .query(&mut connection);
+
+                    match redis_result {
+                        Ok(value) => {
+                            match value {
+                                // Only send value, when it's not a cache hit
+                                Value::Nil => {
+                                    println!("Sending value to the ws client {}", coinbase_message);
+                                    ws_tx.lock().await.send(Message::Text(data)).unwrap();
+                                }
+                                _ => {}
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!("Error setting cache: {}", err);
+                        }
+                    }
                 }
+
             }
             Message::Close(_) => {
                 println!("WebSocket connection closed");

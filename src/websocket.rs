@@ -1,24 +1,22 @@
 use axum::{
-    extract::ws::{WebSocket, WebSocketUpgrade},
+    extract::{ws::{WebSocket, WebSocketUpgrade, Message}, State},
     response::Response,
 };
-use std::time::Duration;
-use tokio::time;
-
-use axum::extract::ws::Message;
 use futures_util::{
     sink::SinkExt,
     stream::{SplitSink, SplitStream, StreamExt},
 };
 
-pub async fn websocket_handler(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(handle_socket)
+use crate::AppState;
+
+pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
+     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(socket: WebSocket) {
+async fn handle_socket(socket: WebSocket, state: AppState) {
     let (sender, receiver) = socket.split();
 
-    tokio::spawn(write(sender));
+    tokio::spawn(write(sender, state));
     tokio::spawn(read(receiver));
 }
 
@@ -26,16 +24,10 @@ async fn read(_receiver: SplitStream<WebSocket>) {
     // ...
 }
 
-async fn write(mut sender: SplitSink<WebSocket, Message>) {
-    let interval = Duration::from_secs(5); // Set the interval to 3 seconds
-
-    loop {
-        println!("Sending a message...");
-        sender
-            .send(Message::Text(r#"{ "message": "Hello world" }"#.to_string()))
-            .await
-            .unwrap();
-
-        time::sleep(interval).await;
+async fn write(mut sender: SplitSink<WebSocket, Message>, state: AppState) {
+    while let Some(msg) = state.rx.lock().await.recv().await {
+        sender.send(Message::Text(msg.to_string())).await.expect("Error while sending message");
     }
+
+    sender.close().await.unwrap();
 }

@@ -16,3 +16,24 @@ Linting and formatting:
 cargo fmt --all
 cargo clippy --all --tests
 ```
+
+Code to subscribe to local WS
+
+```
+const ws = new WebSocket('ws://127.0.0.1:8080/ws');
+
+ws.onopen = event => {
+    console.log('sending echo');
+    ws.send(JSON.stringify({
+        event: 'echo',
+        data: {
+            message: 'hello'
+        }
+    }));
+};
+
+ws.onmessage = event => {
+    const msg = JSON.parse(event.data);
+    console.log('received msg', msg);
+}
+```
