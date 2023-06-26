@@ -3,11 +3,11 @@ use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
 use routes::{graphql_handler, graphql_playground};
-use tokio::sync::Mutex;
-use tokio::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
-use tungstenite::Message;
 use std::sync::Arc;
 use std::{env, net::SocketAddr};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::Mutex;
+use tungstenite::Message;
 
 use crate::coinbase::subscribe_coinbase_ticker;
 use crate::model::{MutationRoot, QueryRoot};
@@ -39,7 +39,8 @@ async fn main() {
 
     // tx - transmitter
     // rx - receiver
-    let (tx, rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) = mpsc::unbounded_channel();
+    let (tx, rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
+        mpsc::unbounded_channel();
     let tx = Arc::new(Mutex::new(tx));
     let rx = Arc::new(Mutex::new(rx));
 

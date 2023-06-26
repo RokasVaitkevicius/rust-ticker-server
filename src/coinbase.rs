@@ -2,8 +2,8 @@ use futures_util::{SinkExt, StreamExt};
 use redis::{Client as RedisClient, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
+use std::{error::Error, fmt, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
-use std::{fmt, error::Error, sync::Arc};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 #[derive(Deserialize)]
@@ -49,7 +49,9 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData,
     }
 }
 
-pub async fn subscribe_coinbase_ticker(ws_tx: &Arc<tokio::sync::Mutex<UnboundedSender<tungstenite::Message>>>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn subscribe_coinbase_ticker(
+    ws_tx: &Arc<tokio::sync::Mutex<UnboundedSender<tungstenite::Message>>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let url = "wss://ws-feed.exchange.coinbase.com";
     let (mut ws_stream, _) = connect_async(url).await?;
 
@@ -92,13 +94,10 @@ pub async fn subscribe_coinbase_ticker(ws_tx: &Arc<tokio::sync::Mutex<UnboundedS
 
                     match redis_result {
                         Ok(value) => {
-                            match value {
-                                // Only send value, when it's not a cache hit
-                                Value::Nil => {
-                                    println!("Sending value to the ws client {}", coinbase_message);
-                                    ws_tx.lock().await.send(Message::Text(data)).unwrap();
-                                }
-                                _ => {}
+                            // Only send value, when it's not a cache hit
+                            if value == Value::Nil {
+                                println!("Sending value to the ws client {}", coinbase_message);
+                                ws_tx.lock().await.send(Message::Text(data)).unwrap();
                             }
                         }
                         Err(err) => {
@@ -106,7 +105,6 @@ pub async fn subscribe_coinbase_ticker(ws_tx: &Arc<tokio::sync::Mutex<UnboundedS
                         }
                     }
                 }
-
             }
             Message::Close(_) => {
                 println!("WebSocket connection closed");

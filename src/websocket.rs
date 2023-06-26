@@ -1,5 +1,8 @@
 use axum::{
-    extract::{ws::{WebSocket, WebSocketUpgrade, Message}, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
+    },
     response::Response,
 };
 use futures_util::{
@@ -10,7 +13,7 @@ use futures_util::{
 use crate::AppState;
 
 pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
-     ws.on_upgrade(|socket| handle_socket(socket, state))
+    ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
@@ -26,7 +29,10 @@ async fn read(_receiver: SplitStream<WebSocket>) {
 
 async fn write(mut sender: SplitSink<WebSocket, Message>, state: AppState) {
     while let Some(msg) = state.rx.lock().await.recv().await {
-        sender.send(Message::Text(msg.to_string())).await.expect("Error while sending message");
+        sender
+            .send(Message::Text(msg.to_string()))
+            .await
+            .expect("Error while sending message");
     }
 
     sender.close().await.unwrap();
