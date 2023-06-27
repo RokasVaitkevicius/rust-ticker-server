@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::model::ServiceSchema;
+use crate::graphql::ServiceSchema;
 
 #[derive(Serialize)]
 struct Health {

@@ -1,6 +1,6 @@
 use async_graphql::{Context, EmptySubscription, Object, Schema};
 
-use crate::coinbase::fetch_coinbase_price;
+use crate::services::coinbase::fetch_coinbase_price;
 use crate::redis_connection;
 
 pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;

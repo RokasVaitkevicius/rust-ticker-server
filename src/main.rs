@@ -2,23 +2,19 @@ use async_graphql::{EmptySubscription, Schema};
 use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
-use routes::{graphql_handler, graphql_playground};
 use std::sync::Arc;
 use std::{env, net::SocketAddr};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use tungstenite::Message;
 
-use crate::coinbase::subscribe_coinbase_ticker;
-use crate::model::{MutationRoot, QueryRoot};
-use crate::routes::{health, root};
-use crate::websocket::websocket_handler;
+use crate::services::{coinbase::subscribe_coinbase_ticker, websocket::websocket_handler, redis_connection};
+use crate::graphql::{MutationRoot, QueryRoot};
+use crate::api::routes::{health, root, graphql_handler, graphql_playground};
 
-mod coinbase;
-mod model;
-mod redis_connection;
-mod routes;
-mod websocket;
+mod services;
+mod graphql;
+mod api;
 
 #[derive(Clone)]
 pub struct AppState {
