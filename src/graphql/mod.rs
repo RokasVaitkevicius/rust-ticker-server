@@ -1,3 +1,3 @@
 mod model;
 
-pub use model::{ServiceSchema, QueryRoot, MutationRoot};
+pub use model::{MutationRoot, QueryRoot, ServiceSchema};

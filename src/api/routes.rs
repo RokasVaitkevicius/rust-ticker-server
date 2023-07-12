@@ -24,9 +24,7 @@ pub async fn health() -> impl IntoResponse {
 }
 
 pub async fn graphql_playground() -> impl IntoResponse {
-    Html(playground_source(
-        GraphQLPlaygroundConfig::new("/graphql").subscription_endpoint("/ws"),
-    ))
+    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
 }
 
 pub async fn graphql_handler(

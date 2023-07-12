@@ -2,24 +2,28 @@ use async_graphql::{EmptySubscription, Schema};
 use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
+use sqlx::{self, sqlite::SqlitePoolOptions, SqlitePool};
 use std::sync::Arc;
 use std::{env, net::SocketAddr};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use tungstenite::Message;
 
-use crate::services::{coinbase::subscribe_coinbase_ticker, websocket::websocket_handler, redis_connection};
+use crate::api::routes::{graphql_handler, graphql_playground, health, root};
 use crate::graphql::{MutationRoot, QueryRoot};
-use crate::api::routes::{health, root, graphql_handler, graphql_playground};
+use crate::services::{
+    coinbase::subscribe_coinbase_ticker, redis_connection, websocket::websocket_handler,
+};
 
-mod services;
-mod graphql;
 mod api;
+mod graphql;
+mod services;
 
 #[derive(Clone)]
 pub struct AppState {
     pub tx: Arc<Mutex<UnboundedSender<Message>>>,
     pub rx: Arc<Mutex<UnboundedReceiver<Message>>>,
+    pub db_connection: SqlitePool,
 }
 
 #[tokio::main]
@@ -31,7 +35,10 @@ async fn main() {
         .parse()
         .expect("Invalid address format");
 
-    let gql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish();
+    let pool = SqlitePoolOptions::new()
+        .connect("sqlite:db/ticker-server.db")
+        .await
+        .unwrap();
 
     // tx - transmitter
     // rx - receiver
@@ -40,7 +47,15 @@ async fn main() {
     let tx = Arc::new(Mutex::new(tx));
     let rx = Arc::new(Mutex::new(rx));
 
-    let app_state = AppState { tx, rx };
+    let app_state = AppState {
+        tx,
+        rx,
+        db_connection: pool,
+    };
+
+    let gql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+        .data(app_state.clone())
+        .finish();
 
     let app = Router::new()
         .route("/", get(root))
