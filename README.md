@@ -4,6 +4,14 @@ Rust server, which takes ticker prices from coinbase and returns them through gr
 
 Also working on exposing websocket which subscribes to coinbase websocket server and will save prices in redis.
 
+# Prerequisites
+
+In order to run the server you need to have flyway and sqlite installed.
+
+More info on that can be found in `db/README.md` file.
+
+# Notes
+
 To run rust server with hot-reload:
 
 ```
