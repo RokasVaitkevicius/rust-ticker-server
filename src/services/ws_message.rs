@@ -39,7 +39,7 @@ impl From<BinanceMessage> for WsMessage {
     fn from(msg: BinanceMessage) -> Self {
         let symbol = get_symbol(msg.s.as_str());
 
-        let (base, quote) = match symbol.split_once("-") {
+        let (base, quote) = match symbol.split_once('-') {
             Some((base, quote)) => (base.to_string(), quote.to_string()),
             None => ("".to_string(), "".to_string()),
         };
@@ -55,7 +55,7 @@ impl From<BinanceMessage> for WsMessage {
 
 impl From<CoinbaseMessage> for WsMessage {
     fn from(msg: CoinbaseMessage) -> Self {
-        let (base, quote) = match msg.product_id.split_once("-") {
+        let (base, quote) = match msg.product_id.split_once('-') {
             Some((base, quote)) => (base.to_string(), quote.to_string()),
             None => ("".to_string(), "".to_string()),
         };
