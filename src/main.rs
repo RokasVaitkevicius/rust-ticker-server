@@ -12,7 +12,10 @@ use tungstenite::Message;
 use crate::api::routes::{graphql_handler, graphql_playground, health, root};
 use crate::graphql::{MutationRoot, QueryRoot};
 use crate::services::{
-    coinbase::subscribe_coinbase_ticker, redis_connection, websocket::websocket_handler,
+    coinbase::subscribe_coinbase_ticker,
+    redis_connection,
+    websocket::websocket_handler,
+    binance::subscribe_binance_ticker,
 };
 
 mod api;
@@ -35,8 +38,8 @@ async fn main() {
         .parse()
         .expect("Invalid address format");
 
-    let pool = SqlitePoolOptions::new()
-        .connect("sqlite:db/ticker-server.db")
+    let pool: sqlx::Pool<sqlx::Sqlite> = SqlitePoolOptions::new()
+        .connect(env::var("DATABASE_URL").unwrap().as_str())
         .await
         .unwrap();
 
@@ -66,8 +69,17 @@ async fn main() {
         .layer(Extension(gql_schema));
 
     // Spinning up a separate task to subscribe to Coinbase ticker
+    let coinbase_tx = app_state.tx.clone();
     tokio::task::spawn(async move {
-        subscribe_coinbase_ticker(&app_state.tx)
+        subscribe_coinbase_ticker(&coinbase_tx)
+            .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
+            .await
+    });
+
+    // Spinning up a separate task to subscribe to Binance ticker
+    let binance_tx = app_state.tx.clone();
+    tokio::task::spawn(async move {
+        subscribe_binance_ticker(&binance_tx)
             .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
             .await
     });

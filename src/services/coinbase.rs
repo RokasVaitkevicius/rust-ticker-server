@@ -6,6 +6,8 @@ use std::{error::Error, fmt, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
+use crate::services::ws_message::WsMessage;
+
 #[derive(Deserialize)]
 struct CoinbaseResponse {
     data: TickerData,
@@ -20,8 +22,8 @@ pub struct TickerData {
 
 #[derive(Deserialize, Debug)]
 pub struct CoinbaseMessage {
-    product_id: String,
-    price: String,
+    pub product_id: String,
+    pub price: String,
 }
 
 impl fmt::Display for CoinbaseMessage {
@@ -59,7 +61,7 @@ pub async fn subscribe_coinbase_ticker(
 
     let subscribe_msg = r#"{
         "type": "subscribe",
-        "channels": [{ "name": "ticker", "product_ids": ["BTC-USD"] }, { "name": "ticker", "product_ids": ["ETH-USD"] }]
+        "channels": [{ "name": "ticker", "product_ids": ["BTC-USDT"] }, { "name": "ticker", "product_ids": ["ETH-USDT"] }]
     }"#;
 
     ws_stream.send(Message::Text(subscribe_msg.into())).await?;
@@ -80,12 +82,13 @@ pub async fn subscribe_coinbase_ticker(
                 // We only care about ticker messages
                 if v["type"] == "ticker" {
                     let coinbase_message: CoinbaseMessage = serde_json::from_str(&data)?;
+                    let ws_message: WsMessage = coinbase_message.into();
 
                     // println!("{}", coinbase_message);
 
                     let redis_result: Result<Value, redis::RedisError> = redis::cmd("SET")
-                        .arg(&coinbase_message.product_id)
-                        .arg(&coinbase_message.price)
+                        .arg(ws_message.get_key())
+                        .arg(&ws_message.price)
                         .arg("NX")
                         .arg("GET")
                         .arg("EX")
@@ -96,8 +99,14 @@ pub async fn subscribe_coinbase_ticker(
                         Ok(value) => {
                             // Only send value, when it's not a cache hit
                             if value == Value::Nil {
-                                println!("Sending value to the ws client {}", coinbase_message);
-                                ws_tx.lock().await.send(Message::Text(data)).unwrap();
+                                let ws_message_string = serde_json::to_string(&ws_message).unwrap();
+
+                                println!("Sending value to the ws client {}", ws_message);
+                                ws_tx
+                                    .lock()
+                                    .await
+                                    .send(Message::Text(ws_message_string))
+                                    .unwrap();
                             }
                         }
                         Err(err) => {
