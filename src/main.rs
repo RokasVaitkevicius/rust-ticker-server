@@ -12,10 +12,8 @@ use tungstenite::Message;
 use crate::api::routes::{graphql_handler, graphql_playground, health, root};
 use crate::graphql::{MutationRoot, QueryRoot};
 use crate::services::{
-    coinbase::subscribe_coinbase_ticker,
-    redis_connection,
+    binance::subscribe_binance_ticker, coinbase::subscribe_coinbase_ticker, redis_connection,
     websocket::websocket_handler,
-    binance::subscribe_binance_ticker,
 };
 
 mod api;
