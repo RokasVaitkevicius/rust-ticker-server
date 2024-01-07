@@ -1,5 +1,5 @@
 use futures_util::{SinkExt, StreamExt};
-use redis::{Client as RedisClient, Value};
+use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
 use std::{error::Error, fmt, sync::Arc};
@@ -86,14 +86,14 @@ pub async fn subscribe_coinbase_ticker(
 
                     // println!("{}", coinbase_message);
 
-                    let redis_result: Result<Value, redis::RedisError> = redis::cmd("SET")
-                        .arg(ws_message.get_key())
-                        .arg(&ws_message.price)
-                        .arg("NX")
-                        .arg("GET")
-                        .arg("EX")
-                        .arg(20)
-                        .query(&mut connection);
+                    let redis_result: Result<Value, redis::RedisError> = connection.set_options(
+                        ws_message.get_key(),
+                        &ws_message.price,
+                        SetOptions::default()
+                            .conditional_set(ExistenceCheck::NX)
+                            .get(true)
+                            .with_expiration(SetExpiry::EX(20)),
+                    );
 
                     match redis_result {
                         Ok(value) => {

@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use redis::{Client as RedisClient, Value};
+use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use serde::Deserialize;
 use std::{fmt, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
@@ -29,7 +29,6 @@ pub async fn subscribe_binance_ticker(
 
     println!("Connected to Binance WebSocket");
 
-    // let mut con = redis_connection::get_redis_connection();
     // TODO: figure out a way how to reuse connection
     let client = RedisClient::open("redis://127.0.0.1:6379/").unwrap();
     let mut connection = client.get_connection().unwrap();
@@ -42,14 +41,14 @@ pub async fn subscribe_binance_ticker(
                 let binance_message: BinanceMessage = serde_json::from_str(&data)?;
                 let ws_message: WsMessage = binance_message.into();
 
-                let redis_result: Result<Value, redis::RedisError> = redis::cmd("SET")
-                    .arg(ws_message.get_key())
-                    .arg(&ws_message.price)
-                    .arg("NX")
-                    .arg("GET")
-                    .arg("EX")
-                    .arg(20)
-                    .query(&mut connection);
+                let redis_result: Result<Value, redis::RedisError> = connection.set_options(
+                    ws_message.get_key(),
+                    &ws_message.price,
+                    SetOptions::default()
+                        .conditional_set(ExistenceCheck::NX)
+                        .get(true)
+                        .with_expiration(SetExpiry::EX(20)),
+                );
 
                 match redis_result {
                     Ok(value) => {
