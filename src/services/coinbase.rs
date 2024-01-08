@@ -5,7 +5,7 @@ use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptio
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
 use std::{env, fmt};
-use tokio::sync::broadcast::Sender;
+use tokio::{sync::broadcast::Sender, time::sleep, time::Duration};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::services::ws_message::WsMessage;
@@ -55,70 +55,84 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData>
 
 pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
     let url = "wss://ws-feed.exchange.coinbase.com";
-    let (mut ws_stream, _) = connect_async(url).await?;
-
-    info!("Connected to Coinbase WebSocket");
-
-    let subscribe_msg = r#"{
-        "type": "subscribe",
-        "channels": [{ "name": "ticker", "product_ids": ["BTC-USDT"] }, { "name": "ticker", "product_ids": ["ETH-USDT"] }]
-    }"#;
-
-    ws_stream.send(Message::Text(subscribe_msg.into())).await?;
-    info!("Subscribed to ticker channel");
 
     let mut redis_connection = RedisClient::open(env::var("REDIS_URL").unwrap().as_str())
         .unwrap()
         .get_connection()
         .unwrap();
 
-    while let Some(Ok(message)) = ws_stream.next().await {
-        match message {
-            Message::Text(data) => {
-                // info!("Received message: {}", data);
+    loop {
+        match connect_async(url).await {
+            Ok((mut ws_stream, _)) => {
+                info!("Connected to Coinbase WebSocket");
 
-                let v = serde_json::from_str::<serde_json::Value>(&data).unwrap();
+                let subscribe_msg = r#"{
+                  "type": "subscribe",
+                  "channels": [{ "name": "ticker", "product_ids": ["BTC-USDT"] }, { "name": "ticker", "product_ids": ["ETH-USDT"] }]
+                }"#;
 
-                // We only care about ticker messages
-                if v["type"] == "ticker" {
-                    let coinbase_message: CoinbaseMessage = serde_json::from_str(&data)?;
-                    let ws_message: WsMessage = coinbase_message.into();
+                ws_stream.send(Message::Text(subscribe_msg.into())).await?;
+                info!("Subscribed to ticker channel");
 
-                    // info!("{}", coinbase_message);
+                while let Some(Ok(message)) = ws_stream.next().await {
+                    match message {
+                        Message::Text(data) => {
+                            // info!("Received message: {}", data);
 
-                    let redis_result: Result<Value, redis::RedisError> = redis_connection
-                        .set_options(
-                            ws_message.get_key(),
-                            &ws_message.price,
-                            SetOptions::default()
-                                .conditional_set(ExistenceCheck::NX)
-                                .get(true)
-                                .with_expiration(SetExpiry::EX(20)),
-                        );
+                            let v = serde_json::from_str::<serde_json::Value>(&data).unwrap();
 
-                    match redis_result {
-                        Ok(value) => {
-                            // Only send value, when it's not a cache hit
-                            if value == Value::Nil {
-                                let ws_message_string = serde_json::to_string(&ws_message).unwrap();
+                            // We only care about ticker messages
+                            if v["type"] == "ticker" {
+                                let coinbase_message: CoinbaseMessage =
+                                    serde_json::from_str(&data)?;
+                                let ws_message: WsMessage = coinbase_message.into();
 
-                                info!("Sending value to the ws client {}", ws_message);
-                                ws_tx.send(Message::Text(ws_message_string)).unwrap();
+                                // info!("{}", coinbase_message);
+
+                                let redis_result: Result<Value, redis::RedisError> =
+                                    redis_connection.set_options(
+                                        ws_message.get_key(),
+                                        &ws_message.price,
+                                        SetOptions::default()
+                                            .conditional_set(ExistenceCheck::NX)
+                                            .get(true)
+                                            .with_expiration(SetExpiry::EX(20)),
+                                    );
+
+                                match redis_result {
+                                    Ok(value) => {
+                                        // Only send value, when it's not a cache hit
+                                        if value == Value::Nil {
+                                            let ws_message_string =
+                                                serde_json::to_string(&ws_message).unwrap();
+
+                                            info!("Sending value to the ws client {}", ws_message);
+                                            ws_tx.send(Message::Text(ws_message_string)).unwrap();
+                                        }
+                                    }
+                                    Err(err) => {
+                                        warn!("Error setting cache: {}", err);
+                                    }
+                                }
                             }
                         }
-                        Err(err) => {
-                            warn!("Error setting cache: {}", err);
+                        Message::Close(_) => {
+                            info!("WebSocket connection closed");
+                            break;
                         }
+                        _ => {}
                     }
                 }
             }
-            Message::Close(_) => {
-                info!("WebSocket connection closed");
-                break;
+            Err(err) => {
+                warn!(
+                    "Failed to connect to WebSocket: {}. Retrying in 5 seconds...",
+                    err
+                );
             }
-            _ => {}
         }
-    }
 
-    Ok(())
+        // Wait 5 seconds trying to reconnect
+        sleep(Duration::from_secs(5)).await;
+    }
 }
