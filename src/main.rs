@@ -3,10 +3,8 @@ use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
 use sqlx::{self, sqlite::SqlitePoolOptions, SqlitePool};
-use std::sync::Arc;
 use std::{env, net::SocketAddr};
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::sync::Mutex;
+use tokio::sync::broadcast;
 use tungstenite::Message;
 
 use crate::api::routes::{graphql_handler, graphql_playground, health, root};
@@ -22,8 +20,7 @@ mod services;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub tx: Arc<Mutex<UnboundedSender<Message>>>,
-    pub rx: Arc<Mutex<UnboundedReceiver<Message>>>,
+    pub tx: broadcast::Sender<Message>,
     pub db_connection: SqlitePool,
 }
 
@@ -41,17 +38,11 @@ async fn main() {
         .await
         .unwrap();
 
-    // tx - transmitter
-    // rx - receiver
-    let (tx, rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
-        mpsc::unbounded_channel();
-    let tx = Arc::new(Mutex::new(tx));
-    let rx = Arc::new(Mutex::new(rx));
+    let (tx, rx) = broadcast::channel::<Message>(100);
 
     let app_state = AppState {
-        tx,
-        rx,
         db_connection: pool,
+        tx,
     };
 
     let gql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
@@ -69,7 +60,7 @@ async fn main() {
     // Spinning up a separate task to subscribe to Coinbase ticker
     let coinbase_tx = app_state.tx.clone();
     tokio::task::spawn(async move {
-        subscribe_coinbase_ticker(&coinbase_tx)
+        subscribe_coinbase_ticker(coinbase_tx)
             .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
             .await
     });
@@ -77,7 +68,7 @@ async fn main() {
     // Spinning up a separate task to subscribe to Binance ticker
     let binance_tx = app_state.tx.clone();
     tokio::task::spawn(async move {
-        subscribe_binance_ticker(&binance_tx)
+        subscribe_binance_ticker(binance_tx)
             .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
             .await
     });

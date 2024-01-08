@@ -28,7 +28,8 @@ async fn read(_receiver: SplitStream<WebSocket>) {
 }
 
 async fn write(mut sender: SplitSink<WebSocket, Message>, state: AppState) {
-    while let Some(msg) = state.rx.lock().await.recv().await {
+    let mut rx = state.tx.subscribe();
+    while let Ok(msg) = rx.recv().await {
         sender
             .send(Message::Text(msg.to_string()))
             .await

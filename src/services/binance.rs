@@ -1,8 +1,8 @@
 use futures_util::StreamExt;
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use serde::Deserialize;
-use std::{fmt, sync::Arc};
-use tokio::sync::mpsc::UnboundedSender;
+use std::fmt;
+use tokio::sync::broadcast::Sender;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::services::ws_message::WsMessage;
@@ -21,7 +21,7 @@ impl fmt::Display for BinanceMessage {
 }
 
 pub async fn subscribe_binance_ticker(
-    ws_tx: &Arc<tokio::sync::Mutex<UnboundedSender<tungstenite::Message>>>,
+    ws_tx: Sender<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let url = "wss://stream.binance.com:9443/ws/btcusdt@ticker/ethusdt@ticker";
 
@@ -57,11 +57,7 @@ pub async fn subscribe_binance_ticker(
                             let ws_message_string = serde_json::to_string(&ws_message).unwrap();
 
                             println!("Sending value to the ws client {}", ws_message);
-                            ws_tx
-                                .lock()
-                                .await
-                                .send(Message::Text(ws_message_string))
-                                .unwrap();
+                            ws_tx.send(Message::Text(ws_message_string)).unwrap();
                         }
                     }
                     Err(err) => {

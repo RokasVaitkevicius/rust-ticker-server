@@ -2,8 +2,8 @@ use futures_util::{SinkExt, StreamExt};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
-use std::{error::Error, fmt, sync::Arc};
-use tokio::sync::mpsc::UnboundedSender;
+use std::{error::Error, fmt};
+use tokio::sync::broadcast::Sender;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::services::ws_message::WsMessage;
@@ -52,7 +52,7 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData,
 }
 
 pub async fn subscribe_coinbase_ticker(
-    ws_tx: &Arc<tokio::sync::Mutex<UnboundedSender<tungstenite::Message>>>,
+    ws_tx: Sender<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let url = "wss://ws-feed.exchange.coinbase.com";
     let (mut ws_stream, _) = connect_async(url).await?;
@@ -102,11 +102,7 @@ pub async fn subscribe_coinbase_ticker(
                                 let ws_message_string = serde_json::to_string(&ws_message).unwrap();
 
                                 println!("Sending value to the ws client {}", ws_message);
-                                ws_tx
-                                    .lock()
-                                    .await
-                                    .send(Message::Text(ws_message_string))
-                                    .unwrap();
+                                ws_tx.send(Message::Text(ws_message_string)).unwrap();
                             }
                         }
                         Err(err) => {
