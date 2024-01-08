@@ -2,6 +2,7 @@ use async_graphql::{EmptySubscription, Schema};
 use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
+use log::{error, warn};
 use sqlx::{self, sqlite::SqlitePoolOptions, SqlitePool};
 use std::{env, net::SocketAddr};
 use tokio::sync::broadcast;
@@ -27,6 +28,7 @@ pub struct AppState {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    env_logger::init();
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
@@ -38,7 +40,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let (tx, rx) = broadcast::channel::<Message>(100);
+    let (tx, _rx) = broadcast::channel::<Message>(100);
 
     let app_state = AppState {
         db_connection: pool,
@@ -61,7 +63,7 @@ async fn main() {
     let coinbase_tx = app_state.tx.clone();
     tokio::task::spawn(async move {
         subscribe_coinbase_ticker(coinbase_tx)
-            .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
+            .unwrap_or_else(|err| warn!("Connecting to socket failed: {}", err))
             .await
     });
 
@@ -69,12 +71,12 @@ async fn main() {
     let binance_tx = app_state.tx.clone();
     tokio::task::spawn(async move {
         subscribe_binance_ticker(binance_tx)
-            .unwrap_or_else(|err| println!("Connecting to socket failed: {}", err))
+            .unwrap_or_else(|err| warn!("Connecting to socket failed: {}", err))
             .await
     });
 
     if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
-        eprintln!("Server error: {}", e);
+        error!("Server error: {}", e);
         std::process::exit(1);
     }
 }

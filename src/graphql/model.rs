@@ -1,4 +1,5 @@
 use async_graphql::{Context, EmptySubscription, Object, Schema, SimpleObject};
+use log::{info, warn};
 
 use crate::redis_connection;
 use crate::services::coinbase::fetch_coinbase_price;
@@ -43,16 +44,16 @@ impl MutationRoot {
 
         match redis_value {
             Ok(value) => {
-                println!("Cache hit: {}", value);
+                info!("Cache hit: {}", value);
                 return value;
             }
             Err(err) => {
-                eprintln!("Cache hit missed key: {}", redis_key);
-                eprintln!("Error: {}", err);
+                warn!("Cache hit missed key: {}", redis_key);
+                warn!("Error: {}", err);
                 match fetch_coinbase_price(base.as_str(), quote.as_str()).await {
                     Ok(ticker_data) => ticker_data.amount,
                     Err(err) => {
-                        eprintln!("Error retrieving Coinbase amount: {}", err);
+                        warn!("Error retrieving Coinbase amount: {}", err);
                         // TODO: should return a GraphQL error
                         String::from("Failed to fetch ticker price")
                     }

@@ -1,3 +1,4 @@
+use log::warn;
 use serde::Serialize;
 use std::fmt;
 
@@ -74,7 +75,7 @@ fn get_symbol(symbol: &str) -> String {
         "BTCUSDT" => "BTC-USDT".to_string(),
         "ETHUSDT" => "ETH-USDT".to_string(),
         _ => {
-            eprintln!("Unknown symbol: {}", symbol);
+            warn!("Unknown symbol: {}", symbol);
             symbol.to_string()
         }
     }

@@ -1,4 +1,6 @@
+use eyre::{Result, WrapErr};
 use futures_util::StreamExt;
+use log::{info, warn};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use serde::Deserialize;
 use std::fmt;
@@ -20,14 +22,12 @@ impl fmt::Display for BinanceMessage {
     }
 }
 
-pub async fn subscribe_binance_ticker(
-    ws_tx: Sender<Message>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>) -> Result<()> {
     let url = "wss://stream.binance.com:9443/ws/btcusdt@ticker/ethusdt@ticker";
 
     let (mut ws_stream, _) = connect_async(url).await?;
 
-    println!("Connected to Binance WebSocket");
+    info!("Connected to Binance WebSocket");
 
     // TODO: figure out a way how to reuse connection
     let client = RedisClient::open("redis://127.0.0.1:6379/").unwrap();
@@ -36,7 +36,7 @@ pub async fn subscribe_binance_ticker(
     while let Some(Ok(message)) = ws_stream.next().await {
         match message {
             Message::Text(data) => {
-                // println!("Received message: {}", data);
+                // info!("Received message: {}", data);
 
                 let binance_message: BinanceMessage = serde_json::from_str(&data)?;
                 let ws_message: WsMessage = binance_message.into();
@@ -56,17 +56,20 @@ pub async fn subscribe_binance_ticker(
                         if value == Value::Nil {
                             let ws_message_string = serde_json::to_string(&ws_message).unwrap();
 
-                            println!("Sending value to the ws client {}", ws_message);
-                            ws_tx.send(Message::Text(ws_message_string)).unwrap();
+                            info!("Sending value to the ws client {}", ws_message);
+                            ws_tx
+                                .send(Message::Text(ws_message_string))
+                                .map_err(eyre::Report::from)
+                                .wrap_err("Failed to send WebSocket Binance message")?;
                         }
                     }
                     Err(err) => {
-                        eprintln!("Error setting cache: {}", err);
+                        warn!("Error setting cache: {}", err);
                     }
                 }
             }
             Message::Close(_) => {
-                println!("WebSocket connection closed");
+                warn!("WebSocket connection closed");
                 break;
             }
             _ => {}

@@ -1,8 +1,10 @@
+use eyre::{bail, Result};
 use futures_util::{SinkExt, StreamExt};
+use log::{info, warn};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
-use std::{error::Error, fmt};
+use std::fmt;
 use tokio::sync::broadcast::Sender;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
@@ -33,7 +35,7 @@ impl fmt::Display for CoinbaseMessage {
     }
 }
 
-pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData, Box<dyn Error>> {
+pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData> {
     let url = format!("https://api.coinbase.com/v2/prices/{}-{}/buy", base, quote);
 
     let client = ReqwestClient::new();
@@ -45,19 +47,17 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData,
 
         Ok(ticker_data.data)
     } else if let Ok(error_body) = response.text().await {
-        Err(error_body.into())
+        bail!(error_body)
     } else {
-        Err("Unknown error".into())
+        bail!("Unknown error")
     }
 }
 
-pub async fn subscribe_coinbase_ticker(
-    ws_tx: Sender<Message>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
     let url = "wss://ws-feed.exchange.coinbase.com";
     let (mut ws_stream, _) = connect_async(url).await?;
 
-    println!("Connected to Coinbase WebSocket");
+    info!("Connected to Coinbase WebSocket");
 
     let subscribe_msg = r#"{
         "type": "subscribe",
@@ -65,7 +65,7 @@ pub async fn subscribe_coinbase_ticker(
     }"#;
 
     ws_stream.send(Message::Text(subscribe_msg.into())).await?;
-    println!("Subscribed to ticker channel");
+    info!("Subscribed to ticker channel");
 
     // let mut con = redis_connection::get_redis_connection();
     // TODO: figure out a way how to reuse connection
@@ -75,7 +75,7 @@ pub async fn subscribe_coinbase_ticker(
     while let Some(Ok(message)) = ws_stream.next().await {
         match message {
             Message::Text(data) => {
-                // println!("Received message: {}", data);
+                // info!("Received message: {}", data);
 
                 let v = serde_json::from_str::<serde_json::Value>(&data).unwrap();
 
@@ -84,7 +84,7 @@ pub async fn subscribe_coinbase_ticker(
                     let coinbase_message: CoinbaseMessage = serde_json::from_str(&data)?;
                     let ws_message: WsMessage = coinbase_message.into();
 
-                    // println!("{}", coinbase_message);
+                    // info!("{}", coinbase_message);
 
                     let redis_result: Result<Value, redis::RedisError> = connection.set_options(
                         ws_message.get_key(),
@@ -101,18 +101,18 @@ pub async fn subscribe_coinbase_ticker(
                             if value == Value::Nil {
                                 let ws_message_string = serde_json::to_string(&ws_message).unwrap();
 
-                                println!("Sending value to the ws client {}", ws_message);
+                                info!("Sending value to the ws client {}", ws_message);
                                 ws_tx.send(Message::Text(ws_message_string)).unwrap();
                             }
                         }
                         Err(err) => {
-                            eprintln!("Error setting cache: {}", err);
+                            warn!("Error setting cache: {}", err);
                         }
                     }
                 }
             }
             Message::Close(_) => {
-                println!("WebSocket connection closed");
+                info!("WebSocket connection closed");
                 break;
             }
             _ => {}
