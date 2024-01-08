@@ -94,7 +94,6 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>, streams: &str) -> 
 
                             let binance_message: BinanceMessage = serde_json::from_str(&data)?;
                             let ws_message: WsMessage = binance_message.into();
-                            let ws_message_string = serde_json::to_string(&ws_message).unwrap();
 
                             let redis_result: Result<Value, redis::RedisError> = redis_connection
                                 .set_options(

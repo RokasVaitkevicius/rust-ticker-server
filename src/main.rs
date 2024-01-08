@@ -2,7 +2,7 @@ use async_graphql::{EmptySubscription, Schema};
 use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
-use log::{error, info, warn};
+use log::{error, warn};
 use services::binance;
 use sqlx::{self, sqlite::SqlitePoolOptions, SqlitePool};
 use std::{env, net::SocketAddr};
