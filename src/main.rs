@@ -2,7 +2,8 @@ use async_graphql::{EmptySubscription, Schema};
 use axum::{routing::get, Extension, Router, Server};
 use dotenv::dotenv;
 use futures_util::TryFutureExt;
-use log::{error, warn};
+use log::{error, info, warn};
+use services::binance;
 use sqlx::{self, sqlite::SqlitePoolOptions, SqlitePool};
 use std::{env, net::SocketAddr};
 use tokio::sync::broadcast;
@@ -67,13 +68,16 @@ async fn main() {
             .await
     });
 
-    // Spinning up a separate task to subscribe to Binance ticker
-    let binance_tx = app_state.tx.clone();
-    tokio::task::spawn(async move {
-        subscribe_binance_ticker(binance_tx)
-            .unwrap_or_else(|err| warn!("Connecting to socket failed: {}", err))
-            .await
-    });
+    let chunked_streams = binance::get_chunked_ws_streams().await.unwrap();
+
+    for stream in chunked_streams {
+        let binance_tx = app_state.tx.clone();
+        tokio::task::spawn(async move {
+            subscribe_binance_ticker(binance_tx, &stream)
+                .unwrap_or_else(|err| warn!("Connecting to socket failed: {}", err))
+                .await
+        });
+    }
 
     if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
         error!("Server error: {}", e);

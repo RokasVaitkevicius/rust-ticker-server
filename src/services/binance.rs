@@ -1,7 +1,8 @@
-use eyre::{Result, WrapErr};
+use eyre::{bail, Result, WrapErr};
 use futures_util::StreamExt;
 use log::{info, warn};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
+use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
 use std::{env, fmt};
 use tokio::{sync::broadcast::Sender, time::sleep, time::Duration};
@@ -15,6 +16,16 @@ pub struct BinanceMessage {
     pub c: String, // Price
 }
 
+#[derive(Deserialize, Debug)]
+struct ExchangeInfo {
+    symbols: Vec<Symbol>,
+}
+
+#[derive(Deserialize, Debug)]
+struct Symbol {
+    symbol: String,
+}
+
 impl fmt::Display for BinanceMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Use `self.number` to refer to each positional data point.
@@ -22,8 +33,49 @@ impl fmt::Display for BinanceMessage {
     }
 }
 
-pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>) -> Result<()> {
-    let url = "wss://stream.binance.com:9443/ws/btcusdt@ticker/ethusdt@ticker";
+async fn fetch_market_symbols() -> Result<Vec<String>> {
+    let url = "https://api.binance.com/api/v3/exchangeInfo";
+
+    let client = ReqwestClient::new();
+    let response = client.get(url).send().await?;
+
+    if response.status().is_success() {
+        let body = response.text().await?;
+        let exchange_info: ExchangeInfo = serde_json::from_str(&body)?;
+
+        let symbols = exchange_info
+            .symbols
+            .into_iter()
+            .map(|s| s.symbol)
+            .collect();
+
+        Ok(symbols)
+    } else if let Ok(error_body) = response.text().await {
+        bail!(error_body)
+    } else {
+        bail!("Unknown error")
+    }
+}
+
+pub async fn get_chunked_ws_streams() -> Result<Vec<String>> {
+    let symbols = fetch_market_symbols().await?;
+
+    let chunked_streams = symbols
+        .chunks(300)
+        .map(|chunk| {
+            chunk
+                .iter()
+                .map(|symbol| format!("{}@ticker", symbol.to_lowercase()))
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .collect::<Vec<_>>();
+
+    Ok(chunked_streams)
+}
+
+pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>, streams: &str) -> Result<()> {
+    let url = format!("wss://stream.binance.com:9443/ws/{}", streams);
 
     let mut redis_connection = RedisClient::open(env::var("REDIS_URL").unwrap().as_str())
         .unwrap()
@@ -31,7 +83,7 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>) -> Result<()> {
         .unwrap();
 
     loop {
-        match connect_async(url).await {
+        match connect_async(&url).await {
             Ok((mut ws_stream, _)) => {
                 info!("Connected to Binance WebSocket");
 
@@ -42,6 +94,7 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>) -> Result<()> {
 
                             let binance_message: BinanceMessage = serde_json::from_str(&data)?;
                             let ws_message: WsMessage = binance_message.into();
+                            let ws_message_string = serde_json::to_string(&ws_message).unwrap();
 
                             let redis_result: Result<Value, redis::RedisError> = redis_connection
                                 .set_options(

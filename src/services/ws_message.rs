@@ -71,12 +71,17 @@ impl From<CoinbaseMessage> for WsMessage {
 }
 
 fn get_symbol(symbol: &str) -> String {
-    match symbol {
-        "BTCUSDT" => "BTC-USDT".to_string(),
-        "ETHUSDT" => "ETH-USDT".to_string(),
-        _ => {
-            warn!("Unknown symbol: {}", symbol);
-            symbol.to_string()
+    let known_quote_currencies = [
+        "USDT", "BTC", "ETH", "BNB", "DAI", "USD", "EUR", "USDC", "TRY", "BRL", "ZAR", "ARS",
+        "RON", "XRP", "UAH", "BIDR", "NGN", "PLN", "RUB", "DOGE", "IDRT",
+    ];
+    for &quote in known_quote_currencies.iter() {
+        if symbol.ends_with(quote) {
+            if let Some(base) = symbol.strip_suffix(quote) {
+                return format!("{}-{}", base, quote);
+            }
         }
     }
+    warn!("Unknown symbol: {}", symbol);
+    "".to_string()
 }

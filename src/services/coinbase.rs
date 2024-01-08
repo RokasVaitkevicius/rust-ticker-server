@@ -39,7 +39,7 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData>
     let url = format!("https://api.coinbase.com/v2/prices/{}-{}/buy", base, quote);
 
     let client = ReqwestClient::new();
-    let response = client.get(&url).send().await?;
+    let response = client.get(url).send().await?;
 
     if response.status().is_success() {
         let body = response.text().await?;
