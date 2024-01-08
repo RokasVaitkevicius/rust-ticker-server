@@ -1,11 +1,14 @@
 use once_cell::sync::Lazy;
-use redis::{Client, Connection};
-use std::sync::Mutex;
+use redis::{Client as RedisClient, Connection};
+use std::{env, sync::Mutex};
 
 static REDIS_CONNECTION: Lazy<Mutex<Connection>> = Lazy::new(|| {
-    let client = Client::open("redis://127.0.0.1:6379/").unwrap();
-    let connection = client.get_connection().unwrap();
-    Mutex::new(connection)
+    let redis_connection = RedisClient::open(env::var("REDIS_URL").unwrap().as_str())
+        .unwrap()
+        .get_connection()
+        .unwrap();
+
+    Mutex::new(redis_connection)
 });
 
 pub fn get_redis_connection() -> std::sync::MutexGuard<'static, Connection> {

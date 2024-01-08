@@ -3,7 +3,7 @@ use futures_util::StreamExt;
 use log::{info, warn};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use serde::Deserialize;
-use std::fmt;
+use std::{env, fmt};
 use tokio::sync::broadcast::Sender;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
@@ -29,9 +29,10 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>) -> Result<()> {
 
     info!("Connected to Binance WebSocket");
 
-    // TODO: figure out a way how to reuse connection
-    let client = RedisClient::open("redis://127.0.0.1:6379/").unwrap();
-    let mut connection = client.get_connection().unwrap();
+    let mut redis_connection = RedisClient::open(env::var("REDIS_URL").unwrap().as_str())
+        .unwrap()
+        .get_connection()
+        .unwrap();
 
     while let Some(Ok(message)) = ws_stream.next().await {
         match message {
@@ -41,7 +42,7 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>) -> Result<()> {
                 let binance_message: BinanceMessage = serde_json::from_str(&data)?;
                 let ws_message: WsMessage = binance_message.into();
 
-                let redis_result: Result<Value, redis::RedisError> = connection.set_options(
+                let redis_result: Result<Value, redis::RedisError> = redis_connection.set_options(
                     ws_message.get_key(),
                     &ws_message.price,
                     SetOptions::default()
