@@ -56,10 +56,8 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData>
 pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
     let url = "wss://ws-feed.exchange.coinbase.com";
 
-    let mut redis_connection = RedisClient::open(env::var("REDIS_URL").unwrap().as_str())
-        .unwrap()
-        .get_connection()
-        .unwrap();
+    let mut redis_connection =
+        RedisClient::open(env::var("REDIS_URL")?.as_str())?.get_connection()?;
 
     loop {
         match connect_async(url).await {
@@ -79,7 +77,7 @@ pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
                         Message::Text(data) => {
                             // info!("Received message: {}", data);
 
-                            let v = serde_json::from_str::<serde_json::Value>(&data).unwrap();
+                            let v = serde_json::from_str::<serde_json::Value>(&data)?;
 
                             // We only care about ticker messages
                             if v["type"] == "ticker" {
@@ -104,10 +102,10 @@ pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
                                         // Only send value, when it's not a cache hit
                                         if value == Value::Nil {
                                             let ws_message_string =
-                                                serde_json::to_string(&ws_message).unwrap();
+                                                serde_json::to_string(&ws_message)?;
 
                                             info!("Sending value to the ws client {}", ws_message);
-                                            ws_tx.send(Message::Text(ws_message_string)).unwrap();
+                                            ws_tx.send(Message::Text(ws_message_string))?;
                                         }
                                     }
                                     Err(err) => {

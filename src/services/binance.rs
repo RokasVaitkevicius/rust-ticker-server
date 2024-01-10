@@ -77,10 +77,8 @@ pub async fn get_chunked_ws_streams() -> Result<Vec<String>> {
 pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>, streams: &str) -> Result<()> {
     let url = format!("wss://stream.binance.com:9443/ws/{}", streams);
 
-    let mut redis_connection = RedisClient::open(env::var("REDIS_URL").unwrap().as_str())
-        .unwrap()
-        .get_connection()
-        .unwrap();
+    let mut redis_connection =
+        RedisClient::open(env::var("REDIS_URL")?.as_str())?.get_connection()?;
 
     loop {
         match connect_async(&url).await {
@@ -109,8 +107,7 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>, streams: &str) -> 
                                 Ok(value) => {
                                     // Only send value, when it's not a cache hit
                                     if value == Value::Nil {
-                                        let ws_message_string =
-                                            serde_json::to_string(&ws_message).unwrap();
+                                        let ws_message_string = serde_json::to_string(&ws_message)?;
 
                                         info!("Sending value to the ws client {}", ws_message);
                                         ws_tx
