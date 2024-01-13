@@ -23,7 +23,7 @@ mod graphql;
 mod services;
 
 #[derive(Clone)]
-pub struct AppState {
+pub struct AppContext {
     pub tx: broadcast::Sender<Message>,
     pub db_connection: SqlitePool,
     pub settings: Settings,
@@ -35,8 +35,6 @@ async fn main() {
     env_logger::init();
 
     let settings = Settings::new().expect("Failed to load configuration");
-
-    println!("{:?}", settings);
 
     let port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
@@ -50,7 +48,7 @@ async fn main() {
 
     let (tx, _rx) = broadcast::channel::<Message>(100);
 
-    let app_state = AppState {
+    let app_state = AppContext {
         db_connection: pool,
         tx,
         settings,
