@@ -54,11 +54,10 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData>
 }
 
 pub async fn subscribe_coinbase_ticker(app_context: AppContext) -> Result<()> {
-    let mut redis_connection =
-        RedisClient::open(app_context.settings.redis_url)?.get_connection()?;
+    let mut redis_connection = RedisClient::open(app_context.config.redis_url)?.get_connection()?;
 
     loop {
-        match connect_async(app_context.settings.coinbase_ws_url.as_str()).await {
+        match connect_async(app_context.config.coinbase_ws_url.as_str()).await {
             Ok((mut ws_stream, _)) => {
                 info!("Connected to Coinbase WebSocket");
 

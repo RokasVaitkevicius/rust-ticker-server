@@ -75,10 +75,10 @@ pub async fn get_chunked_ws_streams() -> Result<Vec<String>> {
 }
 
 pub async fn subscribe_binance_ticker(app_context: AppContext, streams: &str) -> Result<()> {
-    let url = format!("{}/{}", app_context.settings.binance_ws_url, streams);
+    let url = format!("{}/{}", app_context.config.binance_ws_url, streams);
 
     let mut redis_connection =
-        RedisClient::open(app_context.settings.redis_url.as_str())?.get_connection()?;
+        RedisClient::open(app_context.config.redis_url.as_str())?.get_connection()?;
 
     loop {
         match connect_async(&url).await {

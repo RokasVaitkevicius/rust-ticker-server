@@ -1,9 +1,9 @@
-use config::{Config, Environment};
+use config::Environment;
 use eyre::Result;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct Settings {
+pub struct Config {
     #[serde(default = "default_server_port")]
     pub server_port: u16,
     #[serde(default = "default_binance_ws_url")]
@@ -16,9 +16,9 @@ pub struct Settings {
     pub redis_url: String,
 }
 
-impl Settings {
+impl Config {
     pub fn new() -> Result<Self> {
-        let config: Settings = Config::builder()
+        let config: Config = config::Config::builder()
             .add_source(Environment::default())
             .build()?
             .try_deserialize()?;

@@ -10,7 +10,7 @@ use tokio::sync::broadcast;
 use tungstenite::Message;
 
 use crate::api::routes::{graphql_handler, graphql_playground, health, root};
-use crate::config::settings::Settings;
+use crate::config::Config;
 use crate::graphql::{MutationRoot, QueryRoot};
 use crate::services::{
     binance::subscribe_binance_ticker, coinbase::subscribe_coinbase_ticker, redis_connection,
@@ -25,7 +25,7 @@ mod services;
 #[derive(Clone)]
 pub struct AppContext {
     pub db_connection: SqlitePool,
-    pub settings: Settings,
+    pub config: Config,
     pub ticker_tx: broadcast::Sender<Message>,
 }
 
@@ -34,10 +34,10 @@ async fn main() {
     dotenv().ok();
     env_logger::init();
 
-    let settings = Settings::new().expect("Failed to load configuration");
+    let config = Config::new().expect("Failed to load configuration");
 
     let pool: sqlx::Pool<sqlx::Sqlite> = SqlitePoolOptions::new()
-        .connect(&settings.database_url)
+        .connect(&config.database_url)
         .await
         .unwrap();
 
@@ -45,11 +45,11 @@ async fn main() {
 
     let app_context = AppContext {
         db_connection: pool,
-        settings,
+        config,
         ticker_tx,
     };
 
-    let addr: SocketAddr = format!("0.0.0.0:{}", app_context.settings.server_port)
+    let addr: SocketAddr = format!("0.0.0.0:{}", app_context.config.server_port)
         .parse()
         .expect("Invalid address format");
 
