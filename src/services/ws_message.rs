@@ -73,7 +73,7 @@ impl From<CoinbaseMessage> for WsMessage {
 fn get_symbol(symbol: &str) -> String {
     let known_quote_currencies = [
         "USDT", "BTC", "ETH", "BNB", "DAI", "USD", "EUR", "USDC", "TRY", "BRL", "ZAR", "ARS",
-        "RON", "XRP", "UAH", "BIDR", "NGN", "PLN", "RUB", "DOGE", "IDRT",
+        "RON", "XRP", "UAH", "BIDR", "NGN", "PLN", "RUB", "DOGE", "IDRT", "TRX",
     ];
     for &quote in known_quote_currencies.iter() {
         if symbol.ends_with(quote) {
