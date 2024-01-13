@@ -5,7 +5,7 @@ use futures_util::TryFutureExt;
 use log::{error, warn};
 use services::binance;
 use sqlx::{self, sqlite::SqlitePoolOptions, SqlitePool};
-use std::{env, net::SocketAddr};
+use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tungstenite::Message;
 
@@ -24,9 +24,9 @@ mod services;
 
 #[derive(Clone)]
 pub struct AppContext {
-    pub tx: broadcast::Sender<Message>,
     pub db_connection: SqlitePool,
     pub settings: Settings,
+    pub ticker_tx: broadcast::Sender<Message>,
 }
 
 #[tokio::main]
@@ -36,26 +36,25 @@ async fn main() {
 
     let settings = Settings::new().expect("Failed to load configuration");
 
-    let port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
-    let addr: SocketAddr = format!("0.0.0.0:{}", port)
-        .parse()
-        .expect("Invalid address format");
-
     let pool: sqlx::Pool<sqlx::Sqlite> = SqlitePoolOptions::new()
-        .connect(env::var("DATABASE_URL").unwrap().as_str())
+        .connect(&settings.database_url)
         .await
         .unwrap();
 
-    let (tx, _rx) = broadcast::channel::<Message>(100);
+    let (ticker_tx, _rx) = broadcast::channel::<Message>(100);
 
-    let app_state = AppContext {
+    let app_context = AppContext {
         db_connection: pool,
-        tx,
         settings,
+        ticker_tx,
     };
 
+    let addr: SocketAddr = format!("0.0.0.0:{}", app_context.settings.server_port)
+        .parse()
+        .expect("Invalid address format");
+
     let gql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(app_state.clone())
+        .data(app_context.clone())
         .finish();
 
     let app = Router::new()
@@ -63,13 +62,13 @@ async fn main() {
         .route("/ws", get(websocket_handler))
         .route("/health", get(health))
         .route("/graphql", get(graphql_playground).post(graphql_handler))
-        .with_state(app_state.clone())
+        .with_state(app_context.clone())
         .layer(Extension(gql_schema));
 
     // Spinning up a separate task to subscribe to Coinbase ticker
-    let coinbase_tx = app_state.tx.clone();
+    let app_context_cl = app_context.clone();
     tokio::task::spawn(async move {
-        subscribe_coinbase_ticker(coinbase_tx)
+        subscribe_coinbase_ticker(app_context_cl)
             .unwrap_or_else(|err| warn!("Connecting to socket failed: {}", err))
             .await
     });
@@ -77,9 +76,9 @@ async fn main() {
     let chunked_streams = binance::get_chunked_ws_streams().await.unwrap();
 
     for stream in chunked_streams {
-        let binance_tx = app_state.tx.clone();
+        let app_context_cl = app_context.clone();
         tokio::task::spawn(async move {
-            subscribe_binance_ticker(binance_tx, &stream)
+            subscribe_binance_ticker(app_context_cl, &stream)
                 .unwrap_or_else(|err| warn!("Connecting to socket failed: {}", err))
                 .await
         });

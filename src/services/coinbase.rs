@@ -4,11 +4,11 @@ use log::{info, warn};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
-use std::{env, fmt};
-use tokio::{sync::broadcast::Sender, time::sleep, time::Duration};
+use std::fmt;
+use tokio::{time::sleep, time::Duration};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use crate::services::ws_message::WsMessage;
+use crate::{services::ws_message::WsMessage, AppContext};
 
 #[derive(Deserialize)]
 struct CoinbaseResponse {
@@ -53,14 +53,12 @@ pub async fn fetch_coinbase_price(base: &str, quote: &str) -> Result<TickerData>
     }
 }
 
-pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
-    let url = "wss://ws-feed.exchange.coinbase.com";
-
+pub async fn subscribe_coinbase_ticker(app_context: AppContext) -> Result<()> {
     let mut redis_connection =
-        RedisClient::open(env::var("REDIS_URL")?.as_str())?.get_connection()?;
+        RedisClient::open(app_context.settings.redis_url)?.get_connection()?;
 
     loop {
-        match connect_async(url).await {
+        match connect_async(app_context.settings.coinbase_ws_url.as_str()).await {
             Ok((mut ws_stream, _)) => {
                 info!("Connected to Coinbase WebSocket");
 
@@ -105,7 +103,9 @@ pub async fn subscribe_coinbase_ticker(ws_tx: Sender<Message>) -> Result<()> {
                                                 serde_json::to_string(&ws_message)?;
 
                                             info!("Sending value to the ws client {}", ws_message);
-                                            ws_tx.send(Message::Text(ws_message_string))?;
+                                            app_context
+                                                .ticker_tx
+                                                .send(Message::Text(ws_message_string))?;
                                         }
                                     }
                                     Err(err) => {

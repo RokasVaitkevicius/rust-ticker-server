@@ -4,11 +4,11 @@ use log::{info, warn};
 use redis::{Client as RedisClient, Commands, ExistenceCheck, SetExpiry, SetOptions, Value};
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
-use std::{env, fmt};
-use tokio::{sync::broadcast::Sender, time::sleep, time::Duration};
+use std::fmt;
+use tokio::{time::sleep, time::Duration};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use crate::services::ws_message::WsMessage;
+use crate::{services::ws_message::WsMessage, AppContext};
 
 #[derive(Deserialize, Debug)]
 pub struct BinanceMessage {
@@ -74,11 +74,11 @@ pub async fn get_chunked_ws_streams() -> Result<Vec<String>> {
     Ok(chunked_streams)
 }
 
-pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>, streams: &str) -> Result<()> {
-    let url = format!("wss://stream.binance.com:9443/ws/{}", streams);
+pub async fn subscribe_binance_ticker(app_context: AppContext, streams: &str) -> Result<()> {
+    let url = format!("{}/{}", app_context.settings.binance_ws_url, streams);
 
     let mut redis_connection =
-        RedisClient::open(env::var("REDIS_URL")?.as_str())?.get_connection()?;
+        RedisClient::open(app_context.settings.redis_url.as_str())?.get_connection()?;
 
     loop {
         match connect_async(&url).await {
@@ -110,7 +110,8 @@ pub async fn subscribe_binance_ticker(ws_tx: Sender<Message>, streams: &str) -> 
                                         let ws_message_string = serde_json::to_string(&ws_message)?;
 
                                         info!("Sending value to the ws client {}", ws_message);
-                                        ws_tx
+                                        app_context
+                                            .ticker_tx
                                             .send(Message::Text(ws_message_string))
                                             .map_err(eyre::Report::from)
                                             .wrap_err("Failed to send WebSocket Binance message")?;
