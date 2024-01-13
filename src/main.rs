@@ -10,6 +10,7 @@ use tokio::sync::broadcast;
 use tungstenite::Message;
 
 use crate::api::routes::{graphql_handler, graphql_playground, health, root};
+use crate::config::settings::Settings;
 use crate::graphql::{MutationRoot, QueryRoot};
 use crate::services::{
     binance::subscribe_binance_ticker, coinbase::subscribe_coinbase_ticker, redis_connection,
@@ -17,6 +18,7 @@ use crate::services::{
 };
 
 mod api;
+mod config;
 mod graphql;
 mod services;
 
@@ -24,6 +26,7 @@ mod services;
 pub struct AppState {
     pub tx: broadcast::Sender<Message>,
     pub db_connection: SqlitePool,
+    pub settings: Settings,
 }
 
 #[tokio::main]
@@ -31,7 +34,11 @@ async fn main() {
     dotenv().ok();
     env_logger::init();
 
-    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let settings = Settings::new().expect("Failed to load configuration");
+
+    println!("{:?}", settings);
+
+    let port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
         .parse()
         .expect("Invalid address format");
@@ -46,6 +53,7 @@ async fn main() {
     let app_state = AppState {
         db_connection: pool,
         tx,
+        settings,
     };
 
     let gql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
