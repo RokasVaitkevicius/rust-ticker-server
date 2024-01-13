@@ -10,13 +10,13 @@ use futures_util::{
     stream::{SplitSink, SplitStream, StreamExt},
 };
 
-use crate::AppState;
+use crate::AppContext;
 
-pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
+pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppContext>) -> Response {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState) {
+async fn handle_socket(socket: WebSocket, state: AppContext) {
     let (sender, receiver) = socket.split();
 
     tokio::spawn(write(sender, state));
@@ -27,8 +27,8 @@ async fn read(_receiver: SplitStream<WebSocket>) {
     // ...
 }
 
-async fn write(mut sender: SplitSink<WebSocket, Message>, state: AppState) {
-    let mut rx = state.tx.subscribe();
+async fn write(mut sender: SplitSink<WebSocket, Message>, state: AppContext) {
+    let mut rx = state.ticker_tx.subscribe();
     while let Ok(msg) = rx.recv().await {
         sender
             .send(Message::Text(msg.to_string()))

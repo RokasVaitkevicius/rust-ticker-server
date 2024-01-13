@@ -21,7 +21,7 @@ impl QueryRoot {
     }
 
     async fn providers(&self, _ctx: &Context<'_>) -> Option<Vec<Provider>> {
-        let state = _ctx.data::<crate::AppState>().unwrap();
+        let state = _ctx.data::<crate::AppContext>().unwrap();
 
         let row: Vec<Provider> = sqlx::query_as!(Provider, "SELECT * FROM providers")
             .fetch_all(&state.db_connection)

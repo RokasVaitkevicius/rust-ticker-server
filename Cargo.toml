@@ -21,6 +21,7 @@ sqlx = { version = "0.7", features = ["runtime-tokio", "tls-native-tls", "sqlite
 eyre = "0.6.11"
 log = "0.4.20"
 env_logger = "0.10.1"
+config = "0.13.4"
 
 [dev-dependencies]
 cargo-watch = "8.4.0"
